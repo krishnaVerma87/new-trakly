@@ -1,0 +1,33 @@
+# FastAPI Stack
+fastapi==0.109.2
+uvicorn[standard]==0.27.1
+python-multipart==0.0.9
+
+# Database (Async MySQL)
+SQLAlchemy==2.0.25
+alembic==1.13.1
+aiomysql==0.2.0
+PyMySQL==1.1.0
+
+# Validation & Settings
+pydantic==2.6.1
+pydantic-settings==2.1.0
+email-validator==2.1.0
+
+# Authentication
+python-jose[cryptography]==3.3.0
+bcrypt==4.1.2
+passlib[bcrypt]==1.7.4
+
+# Duplicate Detection (TF-IDF)
+scikit-learn==1.4.0
+numpy==1.26.4
+
+# Utilities
+python-dateutil==2.8.2
+pytz==2024.1
+
+# Development/Testing
+pytest==7.4.4
+pytest-asyncio==0.23.4
+httpx==0.26.0
