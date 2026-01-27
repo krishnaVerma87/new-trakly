@@ -1,5 +1,7 @@
 """User management service."""
 from typing import Dict, Any, List, Optional
+import secrets
+import string
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,6 +10,7 @@ from app.core.security import get_password_hash
 from app.models.user import User
 from app.repositories.user import UserRepository, RoleRepository
 from app.repositories.organization import OrganizationRepository
+from app.services.email_service import EmailService
 
 
 class UserService:
@@ -134,3 +137,137 @@ class UserService:
 
         await self.user_repo.update(user_id, {"is_active": False})
         return True
+
+    def _generate_temp_password(self, length: int = 12) -> str:
+        """
+        Generate a secure temporary password.
+
+        Args:
+            length: Password length (default 12)
+
+        Returns:
+            Random password string
+        """
+        # Include uppercase, lowercase, digits, and special characters
+        alphabet = string.ascii_letters + string.digits + "!@#$%^&*"
+        password = ''.join(secrets.choice(alphabet) for _ in range(length))
+
+        # Ensure at least one of each type
+        if not any(c.isupper() for c in password):
+            password = password[:-1] + secrets.choice(string.ascii_uppercase)
+        if not any(c.isdigit() for c in password):
+            password = password[:-1] + secrets.choice(string.digits)
+
+        return password
+
+    async def bulk_invite_users(
+        self,
+        users_data: List[Dict[str, Any]],
+        organization_id: str,
+        send_emails: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Bulk invite users to the organization.
+
+        Args:
+            users_data: List of user data dictionaries with email, full_name, role_id
+            organization_id: Organization ID
+            send_emails: Whether to send welcome emails (default True)
+
+        Returns:
+            Dictionary with total, successful, failed counts and detailed results
+        """
+        # Verify organization exists
+        organization = await self.org_repo.get(organization_id)
+        if not organization:
+            raise NotFoundError("Organization not found")
+
+        results = []
+        successful = 0
+        failed = 0
+
+        email_service = EmailService() if send_emails else None
+
+        for user_data in users_data:
+            email = user_data.get("email")
+            full_name = user_data.get("full_name")
+            role_id = user_data.get("role_id")
+
+            result = {
+                "email": email,
+                "full_name": full_name,
+                "success": False,
+                "user_id": None,
+                "error": None,
+                "temp_password": None,
+            }
+
+            try:
+                # Check if email already exists
+                if await self.user_repo.email_exists(email):
+                    result["error"] = f"Email {email} is already in use"
+                    failed += 1
+                    results.append(result)
+                    continue
+
+                # Verify role exists and belongs to this organization
+                role = await self.role_repo.get(role_id)
+                if not role:
+                    result["error"] = "Role not found"
+                    failed += 1
+                    results.append(result)
+                    continue
+
+                if role.organization_id != organization_id:
+                    result["error"] = "Role does not belong to this organization"
+                    failed += 1
+                    results.append(result)
+                    continue
+
+                # Generate temporary password
+                temp_password = self._generate_temp_password()
+
+                # Create user
+                create_data = {
+                    "email": email,
+                    "full_name": full_name,
+                    "password_hash": get_password_hash(temp_password),
+                    "organization_id": organization_id,
+                    "is_active": True,
+                }
+
+                user = await self.user_repo.create(create_data)
+
+                # Assign role
+                await self.user_repo.assign_role(user.id, role_id)
+
+                # Send welcome email if enabled
+                if email_service:
+                    try:
+                        await email_service.send_welcome_email(
+                            to_email=email,
+                            user_name=full_name,
+                            temp_password=temp_password,
+                            organization_name=organization.name,
+                        )
+                    except Exception as email_error:
+                        # Log email error but don't fail the user creation
+                        result["error"] = f"User created but email failed: {str(email_error)}"
+
+                result["success"] = True
+                result["user_id"] = user.id
+                result["temp_password"] = temp_password
+                successful += 1
+
+            except Exception as e:
+                result["error"] = str(e)
+                failed += 1
+
+            results.append(result)
+
+        return {
+            "total": len(users_data),
+            "successful": successful,
+            "failed": failed,
+            "results": results,
+        }

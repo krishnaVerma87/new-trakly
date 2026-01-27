@@ -97,6 +97,8 @@ class Role(BaseModel):
     users = relationship(
         "User",
         secondary=user_roles,
+        primaryjoin="Role.id == user_roles.c.role_id",
+        secondaryjoin="User.id == user_roles.c.user_id",
         back_populates="roles",
         lazy="selectin",
     )
@@ -137,6 +139,8 @@ class User(BaseModel):
     roles = relationship(
         "Role",
         secondary=user_roles,
+        primaryjoin="User.id == user_roles.c.user_id",
+        secondaryjoin="Role.id == user_roles.c.role_id",
         back_populates="users",
         lazy="selectin",
     )
@@ -148,6 +152,7 @@ class User(BaseModel):
     project_memberships = relationship(
         "ProjectMember",
         back_populates="user",
+        foreign_keys="ProjectMember.user_id",
         lazy="selectin",
     )
 

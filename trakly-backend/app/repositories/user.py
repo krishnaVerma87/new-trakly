@@ -1,11 +1,12 @@
 """User repository with role and permission handling."""
 from typing import List, Optional
+from datetime import datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, insert
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.user import User, Role
+from app.models.user import User, Role, user_roles
 from app.repositories.base import BaseRepository
 
 
@@ -72,6 +73,22 @@ class UserRepository(BaseRepository[User]):
             query = query.where(User.id != exclude_id)
         result = await self.db.execute(query)
         return result.scalar_one_or_none() is not None
+
+    async def assign_role(
+        self,
+        user_id: str,
+        role_id: str,
+        assigned_by: Optional[str] = None,
+    ) -> None:
+        """Assign a role to a user."""
+        stmt = insert(user_roles).values(
+            user_id=user_id,
+            role_id=role_id,
+            assigned_at=datetime.utcnow(),
+            assigned_by=assigned_by,
+        )
+        await self.db.execute(stmt)
+        await self.db.commit()
 
 
 class RoleRepository(BaseRepository[Role]):

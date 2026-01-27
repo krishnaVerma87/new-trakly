@@ -25,6 +25,7 @@ class Organization(BaseModel):
     teams = relationship("Team", back_populates="organization", lazy="selectin")
     projects = relationship("Project", back_populates="organization", lazy="selectin")
     roles = relationship("Role", back_populates="organization", lazy="selectin")
+    workflow_templates = relationship("WorkflowTemplate", back_populates="organization", lazy="selectin")
 
     def __repr__(self) -> str:
         return f"<Organization {self.name} ({self.slug})>"

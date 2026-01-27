@@ -44,6 +44,7 @@ class Comment(BaseModel):
     feature = relationship("Feature", back_populates="comments", foreign_keys=[feature_id])
     author = relationship("User")
     parent_comment = relationship("Comment", remote_side="Comment.id", backref="replies")
+    mentions = relationship("CommentMention", back_populates="comment", cascade="all, delete-orphan")
 
     def __repr__(self) -> str:
         target = f"issue={self.issue_id}" if self.issue_id else f"feature={self.feature_id}"

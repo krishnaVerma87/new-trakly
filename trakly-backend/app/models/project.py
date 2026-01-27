@@ -45,8 +45,16 @@ class Project(BaseModel):
     # Issue number counter (auto-increment handled in service)
     next_issue_number = Column(String(36), default="1", nullable=False)
 
+    # Workflow template for Kanban board
+    workflow_template_id = Column(
+        String(36),
+        ForeignKey("workflow_templates.id"),
+        nullable=True,
+    )
+
     # Relationships
     organization = relationship("Organization", back_populates="projects")
+    workflow_template = relationship("WorkflowTemplate", back_populates="projects")
     lead_user = relationship("User", foreign_keys=[lead_user_id])
     default_assignee = relationship("User", foreign_keys=[default_assignee_id])
     members = relationship("ProjectMember", back_populates="project", lazy="selectin")
@@ -54,6 +62,11 @@ class Project(BaseModel):
     features = relationship("Feature", back_populates="project", lazy="selectin")
     issues = relationship("Issue", back_populates="project", lazy="selectin")
     labels = relationship("Label", back_populates="project", lazy="selectin")
+    sprints = relationship("Sprint", back_populates="project", lazy="selectin")
+    reminder_rules = relationship("ReminderRule", back_populates="project", lazy="selectin")
+    pins = relationship("ProjectPin", back_populates="project", cascade="all, delete-orphan")
+    wiki_pages = relationship("WikiPage", back_populates="project", lazy="selectin")
+
 
     def __repr__(self) -> str:
         return f"<Project {self.name} ({self.key})>"
@@ -91,7 +104,8 @@ class ProjectMember(BaseModel):
 
     # Relationships
     project = relationship("Project", back_populates="members")
-    user = relationship("User", back_populates="project_memberships", foreign_keys=[user_id])
+    user = relationship("User", back_populates="project_memberships", foreign_keys=[user_id], lazy="selectin")
+
 
     def __repr__(self) -> str:
         return f"<ProjectMember project={self.project_id} user={self.user_id}>"
@@ -126,3 +140,30 @@ class Component(BaseModel):
 
     def __repr__(self) -> str:
         return f"<Component {self.name}>"
+class ProjectPin(BaseModel):
+    """
+    Project pinned by a user for easy navigation in sidebar.
+    """
+
+    __tablename__ = "project_pins"
+
+    user_id = Column(
+        String(36),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    project_id = Column(
+        String(36),
+        ForeignKey("projects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Relationships
+    project = relationship("Project", back_populates="pins", lazy="selectin")
+    user = relationship("User", foreign_keys=[user_id])
+
+
+    def __repr__(self) -> str:
+        return f"<ProjectPin user={self.user_id} project={self.project_id}>"

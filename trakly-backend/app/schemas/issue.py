@@ -33,6 +33,8 @@ class IssueCreate(IssueBase):
     component_id: Optional[str] = None
     assignee_id: Optional[str] = None
     parent_issue_id: Optional[str] = None  # for sub-tasks
+    sprint_id: Optional[str] = None
+    workflow_column_id: Optional[str] = None
     label_ids: List[str] = []
 
     # Bug-specific fields
@@ -51,11 +53,14 @@ class IssueUpdate(BaseModel):
     """Schema for updating an issue."""
     title: Optional[str] = Field(None, min_length=1, max_length=500)
     description: Optional[str] = None
+    issue_type: Optional[str] = None  # task, bug, story, improvement, sub_task
     status: Optional[str] = None  # new, in_progress, review, done, closed, wont_fix
     priority: Optional[str] = None
     severity: Optional[str] = None
     assignee_id: Optional[str] = None
     component_id: Optional[str] = None
+    sprint_id: Optional[str] = None
+    workflow_column_id: Optional[str] = None
     label_ids: Optional[List[str]] = None
 
     # Bug-specific
@@ -74,6 +79,67 @@ class IssueUpdate(BaseModel):
     time_spent_minutes: Optional[int] = Field(None, ge=0)
 
 
+class ChecklistItemCreate(BaseModel):
+    """Schema for creating a checklist item."""
+    content: str = Field(..., min_length=1, max_length=500)
+    description: Optional[str] = None
+    assignee_id: Optional[str] = None
+    position: Optional[int] = 0
+
+
+class ChecklistItemUpdate(BaseModel):
+    """Schema for updating a checklist item."""
+    content: Optional[str] = Field(None, min_length=1, max_length=500)
+    description: Optional[str] = None
+    assignee_id: Optional[str] = None
+    is_completed: Optional[bool] = None
+    status: Optional[str] = Field(None, pattern="^(pending|in_progress|dev_done|qa_checked)$")
+    position: Optional[int] = None
+
+
+class ChecklistItemResponse(BaseModel):
+    """Checklist item response schema."""
+    id: str
+    checklist_id: str
+    content: str
+    description: Optional[str] = None
+    assignee_id: Optional[str] = None
+    assignee: Optional[UserResponse] = None
+    is_completed: bool
+    status: str = "pending"  # pending, in_progress, dev_done, qa_checked
+    position: int
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+
+class ChecklistCreate(BaseModel):
+    """Schema for creating a checklist."""
+    name: str = Field(..., min_length=1, max_length=255)
+    position: Optional[int] = 0
+
+
+class ChecklistUpdate(BaseModel):
+    """Schema for updating a checklist."""
+    name: Optional[str] = Field(None, min_length=1, max_length=255)
+    position: Optional[int] = None
+
+
+class ChecklistResponse(BaseModel):
+    """Checklist response schema."""
+    id: str
+    issue_id: str
+    name: str
+    position: int
+    items: List[ChecklistItemResponse] = []
+
+    class Config:
+        from_attributes = True
+
+
 class IssueResponse(IssueBase):
     """Issue response schema."""
     id: str
@@ -89,6 +155,8 @@ class IssueResponse(IssueBase):
     assignee_id: Optional[str] = None
     component_id: Optional[str] = None
     parent_issue_id: Optional[str] = None
+    sprint_id: Optional[str] = None
+    workflow_column_id: Optional[str] = None
 
     # Bug fields
     repro_steps: Optional[str] = None
@@ -112,11 +180,15 @@ class IssueResponse(IssueBase):
     # Labels
     labels: List[LabelResponse] = []
 
+    # Checklists (Multi-group support)
+    checklists: List[ChecklistResponse] = []
+
     created_at: datetime
     updated_at: datetime
 
     class Config:
         from_attributes = True
+
 
 
 class IssueWithDetailsResponse(IssueResponse):

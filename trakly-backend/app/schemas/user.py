@@ -15,6 +15,21 @@ class RoleResponse(BaseModel):
     class Config:
         from_attributes = True
 
+    class Config:
+        from_attributes = True
+
+
+class RoleCreate(BaseModel):
+    """Schema for creating a role."""
+    name: str = Field(..., min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+
+
+class RoleUpdate(BaseModel):
+    """Schema for updating a role."""
+    name: Optional[str] = Field(None, min_length=1, max_length=100)
+    description: Optional[str] = Field(None, max_length=500)
+
 
 class UserBase(BaseModel):
     """Base user schema."""
@@ -61,3 +76,51 @@ class UserWithRolesResponse(UserResponse):
 
     class Config:
         from_attributes = True
+
+
+class BulkUserInvite(BaseModel):
+    """Schema for inviting a single user in bulk operation."""
+    email: EmailStr
+    full_name: str = Field(..., min_length=1, max_length=255)
+    role_id: str = Field(..., description="Role to assign to the user")
+
+
+class BulkUserInviteRequest(BaseModel):
+    """Schema for bulk user invitation request."""
+    users: List[BulkUserInvite] = Field(..., min_items=1, max_items=50, description="List of users to invite (max 50)")
+
+    class Config:
+        json_schema_extra = {
+            "example": {
+                "users": [
+                    {
+                        "email": "john@example.com",
+                        "full_name": "John Doe",
+                        "role_id": "role-uuid-developer"
+                    },
+                    {
+                        "email": "jane@example.com",
+                        "full_name": "Jane Smith",
+                        "role_id": "role-uuid-developer"
+                    }
+                ]
+            }
+        }
+
+
+class BulkUserInviteResult(BaseModel):
+    """Result of bulk user invitation."""
+    email: EmailStr
+    full_name: str
+    success: bool
+    user_id: Optional[str] = None
+    error: Optional[str] = None
+    temp_password: Optional[str] = None
+
+
+class BulkUserInviteResponse(BaseModel):
+    """Response for bulk user invitation."""
+    total: int
+    successful: int
+    failed: int
+    results: List[BulkUserInviteResult]

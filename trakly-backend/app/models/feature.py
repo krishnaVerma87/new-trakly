@@ -109,6 +109,17 @@ class Feature(BaseModel):
         lazy="selectin",
         foreign_keys="Comment.feature_id",
     )
+    watchers = relationship(
+        "FeatureWatcher",
+        back_populates="feature",
+        lazy="selectin",
+    )
+    attachments = relationship(
+        "Attachment",
+        back_populates="feature",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
 
     @property
     def feature_key(self) -> str:

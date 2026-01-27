@@ -1,11 +1,11 @@
 """Project, ProjectMember, and Component repositories."""
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.project import Project, ProjectMember, Component
+from app.models.project import Project, ProjectMember, Component, ProjectPin
 from app.repositories.base import BaseRepository
 
 
@@ -89,6 +89,7 @@ class ProjectRepository(BaseRepository[Project]):
 
     async def get_with_details(self, project_id: str) -> Optional[Project]:
         """Get project with all related data loaded."""
+        from app.models.workflow import WorkflowTemplate, WorkflowColumn
         result = await self.db.execute(
             select(Project)
             .where(Project.id == project_id)
@@ -97,9 +98,38 @@ class ProjectRepository(BaseRepository[Project]):
                 selectinload(Project.components),
                 selectinload(Project.lead_user),
                 selectinload(Project.labels),
+                selectinload(Project.workflow_template).selectinload(WorkflowTemplate.columns),
             )
         )
         return result.scalar_one_or_none()
+
+    async def get_by_user_membership(
+        self,
+        user_id: str,
+        organization_id: str,
+        skip: int = 0,
+        limit: int = 100,
+        active_only: bool = True,
+    ) -> List[Project]:
+        """Get all projects where the user is a member."""
+        query = (
+            select(Project)
+            .join(ProjectMember)
+            .where(ProjectMember.user_id == user_id)
+            .where(Project.organization_id == organization_id)
+            .options(
+                selectinload(Project.members),
+                selectinload(Project.components),
+            )
+        )
+
+        if active_only:
+            query = query.where(Project.is_active == True)
+
+        query = query.order_by(Project.name).offset(skip).limit(limit)
+
+        result = await self.db.execute(query)
+        return list(result.scalars().all())
 
 
 class ProjectMemberRepository(BaseRepository[ProjectMember]):
@@ -107,6 +137,21 @@ class ProjectMemberRepository(BaseRepository[ProjectMember]):
 
     def __init__(self, db: AsyncSession):
         super().__init__(ProjectMember, db)
+
+    async def create(self, obj_in: Dict[str, Any]) -> ProjectMember:
+        """Create a new project member with user relationship eagerly loaded."""
+        db_obj = ProjectMember(**obj_in)
+        self.db.add(db_obj)
+        await self.db.commit()
+
+        # Fetch with user relationship eagerly loaded to prevent greenlet errors
+        result = await self.db.execute(
+            select(ProjectMember)
+            .where(ProjectMember.id == db_obj.id)
+            .options(selectinload(ProjectMember.user))
+        )
+        refreshed_obj = result.scalar_one()
+        return refreshed_obj
 
     async def get_by_project(self, project_id: str) -> List[ProjectMember]:
         """Get all members of a project."""
@@ -150,3 +195,29 @@ class ComponentRepository(BaseRepository[Component]):
             .order_by(Component.name)
         )
         return list(result.scalars().all())
+
+
+class ProjectPinRepository(BaseRepository[ProjectPin]):
+    """Repository for ProjectPin operations."""
+
+    def __init__(self, db: AsyncSession):
+        super().__init__(ProjectPin, db)
+
+    async def get_by_user(self, user_id: str) -> List[ProjectPin]:
+        """Get all projects pinned by a user."""
+        result = await self.db.execute(
+            select(ProjectPin)
+            .where(ProjectPin.user_id == user_id)
+            .options(selectinload(ProjectPin.project))
+        )
+        return list(result.scalars().all())
+
+    async def get_pin(self, user_id: str, project_id: str) -> Optional[ProjectPin]:
+        """Get a specific pin record."""
+        result = await self.db.execute(
+            select(ProjectPin)
+            .where(ProjectPin.user_id == user_id)
+            .where(ProjectPin.project_id == project_id)
+        )
+        return result.scalar_one_or_none()
+

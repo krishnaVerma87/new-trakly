@@ -14,6 +14,8 @@ from app.core.exceptions import (
     DuplicateError,
 )
 from app.api.v1 import api_router
+from app.core.scheduler import start_scheduler, shutdown_scheduler
+from app.jobs.reminder_jobs import schedule_reminder_jobs
 
 
 # Create FastAPI application
@@ -111,12 +113,21 @@ async def startup_event():
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info(f"Debug mode: {settings.DEBUG}")
 
+    # Start background scheduler
+    start_scheduler()
+
+    # Schedule reminder jobs
+    await schedule_reminder_jobs()
+
 
 # Shutdown event
 @app.on_event("shutdown")
 async def shutdown_event():
     """Run on application shutdown."""
     logger.info(f"{settings.APP_NAME} shutting down...")
+
+    # Shutdown scheduler gracefully
+    shutdown_scheduler()
 
 
 # Health check endpoints

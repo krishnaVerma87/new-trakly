@@ -1,6 +1,6 @@
 """Project, ProjectMember, and Component schemas."""
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Optional, TYPE_CHECKING, Any
 
 from pydantic import BaseModel, Field
 
@@ -77,10 +77,21 @@ class ProjectResponse(ProjectBase):
     lead_user_id: Optional[str] = None
     default_assignee_id: Optional[str] = None
     is_active: bool
+    workflow_template_id: Optional[str] = None
+    workflow_template: Optional[Any] = None  # WorkflowTemplateResponse with columns
     members: List[ProjectMemberResponse] = []
     components: List[ComponentResponse] = []
     created_at: datetime
     updated_at: datetime
+    is_pinned: Optional[bool] = False
+
+    class Config:
+        from_attributes = True
+class ProjectPinResponse(BaseModel):
+    """Project pin response schema."""
+    user_id: str
+    project_id: str
+    created_at: datetime
 
     class Config:
         from_attributes = True

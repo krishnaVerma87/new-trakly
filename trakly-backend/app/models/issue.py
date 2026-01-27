@@ -94,6 +94,13 @@ class Issue(BaseModel):
         nullable=False,
         index=True,
     )
+    # Workflow column for custom Kanban boards
+    workflow_column_id = Column(
+        String(36),
+        ForeignKey("workflow_columns.id"),
+        nullable=True,
+        index=True,
+    )
     priority = Column(
         SQLEnum(Priority, values_callable=lambda x: [e.value for e in x]),
         default=Priority.MEDIUM,
@@ -129,6 +136,14 @@ class Issue(BaseModel):
         String(36),
         ForeignKey("issues.id"),
         nullable=True,
+    )
+
+    # Sprint assignment
+    sprint_id = Column(
+        String(36),
+        ForeignKey("sprints.id"),
+        nullable=True,
+        index=True,
     )
 
     # Estimation
@@ -193,6 +208,107 @@ class Issue(BaseModel):
         lazy="selectin",
         foreign_keys="Comment.issue_id",
     )
+    sprint = relationship("Sprint", back_populates="issues")
+    workflow_column = relationship("WorkflowColumn")
+    watchers = relationship(
+        "IssueWatcher",
+        back_populates="issue",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    attachments = relationship(
+        "Attachment",
+        back_populates="issue",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+    checklists = relationship(
+        "Checklist",
+        back_populates="issue",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="Checklist.position",
+    )
+    time_logs = relationship(
+        "TimeLog",
+        back_populates="issue",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+    )
+
+
+class Checklist(BaseModel):
+    """
+    Named group of checklist items associated with an issue.
+    """
+
+    __tablename__ = "checklists"
+
+    issue_id = Column(
+        String(36),
+        ForeignKey("issues.id"),
+        nullable=False,
+        index=True,
+    )
+    name = Column(String(255), nullable=False)
+    position = Column(Integer, default=0, nullable=False)
+
+    # Relationships
+    issue = relationship("Issue", back_populates="checklists")
+    items = relationship(
+        "ChecklistItem",
+        back_populates="checklist",
+        lazy="selectin",
+        cascade="all, delete-orphan",
+        order_by="ChecklistItem.position",
+    )
 
     def __repr__(self) -> str:
-        return f"<Issue {self.issue_key}: {self.title[:50]}>"
+        return f"<Checklist {self.name}>"
+
+
+class ChecklistItem(BaseModel):
+    """
+    Checklist item entity with status workflow.
+    
+    Status workflow: pending → in_progress → dev_done → qa_checked
+    Once qa_checked, status cannot be changed.
+    """
+
+    __tablename__ = "checklist_items"
+
+    checklist_id = Column(
+        String(36),
+        ForeignKey("checklists.id"),
+        nullable=False,
+        index=True,
+    )
+    assignee_id = Column(
+        String(36),
+        ForeignKey("users.id"),
+        nullable=True,
+        index=True,
+    )
+    content = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)  # New field for details
+    is_completed = Column(Boolean, default=False, nullable=False)
+    status = Column(
+        String(20),
+        default="pending",
+        nullable=False,
+        index=True,
+    )  # pending, in_progress, dev_done, qa_checked
+    position = Column(Integer, default=0, nullable=False)
+
+    # Relationships
+    checklist = relationship("Checklist", back_populates="items")
+    assignee = relationship("User", lazy="selectin")
+
+    def can_update_status(self) -> bool:
+        """Check if status can be updated (not locked after qa_checked)."""
+        return self.status != "qa_checked"
+
+    def __repr__(self) -> str:
+        return f"<ChecklistItem {self.content[:20]}>"
+
+

@@ -32,6 +32,7 @@ class CommentResponse(BaseModel):
     is_internal: bool
     parent_comment_id: Optional[str] = None
     replies: List["CommentResponse"] = []
+    mentions: List[UserResponse] = []
     created_at: datetime
     updated_at: datetime
 

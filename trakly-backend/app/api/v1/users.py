@@ -11,6 +11,8 @@ from app.schemas.user import (
     UserUpdate,
     UserResponse,
     UserWithRolesResponse,
+    BulkUserInviteRequest,
+    BulkUserInviteResponse,
 )
 from app.services.user_service import UserService
 from app.api.dependencies import get_current_user
@@ -44,6 +46,82 @@ async def create_user(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
     except NotFoundError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+
+
+@router.post("/bulk-invite", response_model=BulkUserInviteResponse, status_code=status.HTTP_200_OK)
+async def bulk_invite_users(
+    request: BulkUserInviteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Bulk invite multiple users to the organization.
+
+    Creates user accounts with auto-generated temporary passwords and sends welcome emails.
+
+    **Features:**
+    - Creates up to 50 users at once
+    - Generates secure temporary passwords
+    - Sends welcome emails with credentials
+    - Assigns specified roles to each user
+    - Returns detailed results for each user
+
+    **Permissions:** Admin or Project Manager
+
+    **Example Request:**
+    ```json
+    {
+      "users": [
+        {
+          "email": "john@example.com",
+          "full_name": "John Doe",
+          "role_id": "developer-role-uuid"
+        },
+        {
+          "email": "jane@example.com",
+          "full_name": "Jane Smith",
+          "role_id": "developer-role-uuid"
+        }
+      ]
+    }
+    ```
+
+    **Example Response:**
+    ```json
+    {
+      "total": 2,
+      "successful": 2,
+      "failed": 0,
+      "results": [
+        {
+          "email": "john@example.com",
+          "full_name": "John Doe",
+          "success": true,
+          "user_id": "user-uuid",
+          "temp_password": "Abc123!@#Xyz",
+          "error": null
+        }
+      ]
+    }
+    ```
+    """
+    # TODO: Add RBAC check - only Admin or Project Manager can bulk invite users
+
+    user_service = UserService(db)
+
+    try:
+        result = await user_service.bulk_invite_users(
+            users_data=[user.model_dump() for user in request.users],
+            organization_id=current_user.organization_id,
+            send_emails=True,
+        )
+
+        return BulkUserInviteResponse(**result)
+
+    except NotFoundError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except ValidationError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
 
 @router.get("", response_model=List[UserWithRolesResponse])

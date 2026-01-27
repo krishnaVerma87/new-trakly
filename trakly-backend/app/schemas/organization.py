@@ -20,6 +20,7 @@ class OrganizationUpdate(BaseModel):
     """Schema for updating an organization."""
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    settings: Optional[str] = None  # JSON string for integration settings
     is_active: Optional[bool] = None
 
 
@@ -27,6 +28,7 @@ class OrganizationResponse(OrganizationBase):
     """Organization response schema."""
     id: str
     description: Optional[str] = None
+    settings: Optional[str] = None  # JSON string for integration settings
     is_active: bool
     created_at: datetime
     updated_at: datetime

@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60
 
     # CORS
-    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3003", "http://localhost"]
+    BACKEND_CORS_ORIGINS: List[str] = ["http://localhost:3003", "http://localhost", "http://localhost:5173", "http://127.0.0.1:5173"]
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
@@ -39,6 +39,48 @@ class Settings(BaseSettings):
             except json.JSONDecodeError:
                 return [origin.strip() for origin in v.split(",")]
         return v
+
+    # Email Settings (supports both SMTP_* and EMAIL_* env var names)
+    EMAIL_HOST: str = "localhost"
+    EMAIL_PORT: int = 587
+    EMAIL_HOST_USER: str = ""
+    EMAIL_HOST_PASSWORD: str = ""
+    EMAIL_USE_TLS: bool = True
+    DEFAULT_FROM_EMAIL: str = "noreply@trakly.com"
+    FROM_NAME: str = "Trakly"
+
+    # Legacy aliases for backward compatibility
+    @property
+    def SMTP_HOST(self) -> str:
+        return self.EMAIL_HOST
+
+    @property
+    def SMTP_PORT(self) -> int:
+        return self.EMAIL_PORT
+
+    @property
+    def SMTP_USER(self) -> str:
+        return self.EMAIL_HOST_USER
+
+    @property
+    def SMTP_PASSWORD(self) -> str:
+        return self.EMAIL_HOST_PASSWORD
+
+    @property
+    def SMTP_USE_TLS(self) -> bool:
+        return self.EMAIL_USE_TLS
+
+    @property
+    def FROM_EMAIL(self) -> str:
+        return self.DEFAULT_FROM_EMAIL
+
+    # Slack Settings (Optional)
+    SLACK_WEBHOOK_URL: Optional[str] = None
+    SLACK_ENABLED: bool = False
+
+    # Scheduler Settings
+    SCHEDULER_ENABLED: bool = True
+    REMINDER_CHECK_INTERVAL_MINUTES: int = 15
 
     model_config = SettingsConfigDict(
         env_file=".env",

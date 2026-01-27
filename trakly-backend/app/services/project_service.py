@@ -4,13 +4,18 @@ from typing import Dict, Any, List
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import NotFoundError, ValidationError
-from app.models.project import Project, ProjectMember, Component
+from app.models.project import Project, ProjectMember, Component, ProjectPin
+
+from app.models.label import Label
 from app.repositories.project import (
     ProjectRepository,
     ProjectMemberRepository,
     ComponentRepository,
+    ProjectPinRepository,
 )
 from app.repositories.organization import OrganizationRepository
+from app.repositories.label import LabelRepository
+from app.services.workflow_service import WorkflowService
 
 
 class ProjectService:
@@ -21,7 +26,10 @@ class ProjectService:
         self.project_repo = ProjectRepository(db)
         self.member_repo = ProjectMemberRepository(db)
         self.component_repo = ComponentRepository(db)
+        self.label_repo = LabelRepository(db)
         self.org_repo = OrganizationRepository(db)
+        self.pin_repo = ProjectPinRepository(db)
+
 
     async def create_project(
         self,
@@ -55,6 +63,13 @@ class ProjectService:
         # Initialize issue counter
         project_data["next_issue_number"] = "1"
 
+        # Assign default workflow template if not specified
+        if "workflow_template_id" not in project_data or not project_data.get("workflow_template_id"):
+            workflow_service = WorkflowService(self.db)
+            default_template = await workflow_service.get_default_template(org_id)
+            if default_template:
+                project_data["workflow_template_id"] = default_template.id
+
         return await self.project_repo.create(project_data)
 
     async def get_project(self, project_id: str) -> Project:
@@ -70,14 +85,26 @@ class ProjectService:
         skip: int = 0,
         limit: int = 100,
         active_only: bool = True,
+        user_id: str = None,
     ) -> List[Project]:
-        """List projects in an organization."""
-        return await self.project_repo.get_by_organization(
-            organization_id,
-            skip=skip,
-            limit=limit,
-            active_only=active_only,
-        )
+        """List projects in an organization, optionally filtered by user membership."""
+        if user_id:
+            # Filter by user membership
+            return await self.project_repo.get_by_user_membership(
+                user_id=user_id,
+                organization_id=organization_id,
+                skip=skip,
+                limit=limit,
+                active_only=active_only,
+            )
+        else:
+            # Show all projects in organization
+            return await self.project_repo.get_by_organization(
+                organization_id,
+                skip=skip,
+                limit=limit,
+                active_only=active_only,
+            )
 
     async def update_project(
         self,
@@ -167,3 +194,90 @@ class ProjectService:
     async def get_components(self, project_id: str) -> List[Component]:
         """Get all components in a project."""
         return await self.component_repo.get_by_project(project_id)
+
+    # Labels
+
+    async def create_label(
+        self,
+        project_id: str,
+        label_data: Dict[str, Any],
+    ) -> Label:
+        """Create a label in a project."""
+        project = await self.project_repo.get(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+
+        # Check if label with same name already exists
+        existing = await self.label_repo.get_by_name(project_id, label_data["name"])
+        if existing:
+            raise ValidationError(f"Label '{label_data['name']}' already exists in this project")
+
+        label_data["project_id"] = project_id
+        return await self.label_repo.create(label_data)
+
+    async def get_labels(
+        self,
+        project_id: str,
+        skip: int = 0,
+        limit: int = 100,
+    ) -> List[Label]:
+        """Get all labels in a project."""
+        return await self.label_repo.get_by_project(project_id, skip, limit)
+
+    async def update_label(
+        self,
+        label_id: str,
+        label_data: Dict[str, Any],
+    ) -> Label:
+        """Update a label."""
+        label = await self.label_repo.get(label_id)
+        if not label:
+            raise NotFoundError("Label not found")
+
+        # Check name uniqueness if name is being updated
+        if "name" in label_data:
+            existing = await self.label_repo.get_by_name(label.project_id, label_data["name"])
+            if existing and existing.id != label_id:
+                raise ValidationError(f"Label '{label_data['name']}' already exists in this project")
+
+        return await self.label_repo.update(label_id, label_data)
+
+    async def delete_label(self, label_id: str) -> bool:
+        """Delete a label."""
+        label = await self.label_repo.get(label_id)
+        if not label:
+            raise NotFoundError("Label not found")
+
+        return await self.label_repo.delete(label_id)
+
+    # Project Pins (Favorites)
+
+    async def pin_project(self, project_id: str, user_id: str) -> ProjectPin:
+        """Pin a project for a user."""
+        project = await self.project_repo.get(project_id)
+        if not project:
+            raise NotFoundError("Project not found")
+
+        # Check if already pinned
+        existing = await self.pin_repo.get_pin(user_id, project_id)
+        if existing:
+            return existing
+
+        return await self.pin_repo.create({
+            "project_id": project_id,
+            "user_id": user_id,
+        })
+
+    async def unpin_project(self, project_id: str, user_id: str) -> bool:
+        """Unpin a project for a user."""
+        pin = await self.pin_repo.get_pin(user_id, project_id)
+        if not pin:
+            return True
+
+        return await self.pin_repo.delete(pin.id)
+
+    async def get_pinned_projects(self, user_id: str) -> List[Project]:
+        """Get all projects pinned by a user."""
+        pins = await self.pin_repo.get_by_user(user_id)
+        return [p.project for p in pins if p.project]
+

@@ -1,19 +1,29 @@
 """Seed data script for Trakly development."""
 import asyncio
 from datetime import datetime
+from sqlalchemy import select
 
 from app.db.session import AsyncSessionLocal
 from app.core.security import get_password_hash
 from app.models.organization import Organization
 from app.models.user import User, Role, Permission
-from app.models.project import Project, Component
+from app.models.project import Project, ProjectMember, Component
 from app.models.team import Team
 from app.core.logger import logger
+from app.services.role_service import RoleService
 
 
 async def seed_permissions():
-    """Create system permissions."""
+    """Create system permissions if not exist."""
     async with AsyncSessionLocal() as db:
+        # Check if exists
+        stmt = select(Permission)
+        result = await db.execute(stmt)
+        existing_permissions = result.scalars().all()
+        if existing_permissions:
+            logger.info(f"Permissions already exist: {len(existing_permissions)}")
+            return existing_permissions
+
         permissions_data = [
             # Issue permissions
             {"name": "issue.create", "resource": "issue", "action": "create"},
@@ -52,6 +62,18 @@ async def seed_permissions():
 async def seed_organizations():
     """Create sample organizations."""
     async with AsyncSessionLocal() as db:
+        # Check existing
+        stmt = select(Organization).where(Organization.slug == "acme-corp")
+        result = await db.execute(stmt)
+        existing = result.scalars().first()
+        if existing:
+            # Need both orgs for downstream functions 
+            stmt2 = select(Organization).where(Organization.slug == "techstart")
+            result2 = await db.execute(stmt2)
+            existing2 = result2.scalars().first()
+            logger.info("Organizations already exist")
+            return [existing, existing2] if existing and existing2 else [existing] # Basic fallback
+
         org1 = Organization(
             name="Acme Corporation",
             slug="acme-corp",
@@ -76,85 +98,62 @@ async def seed_organizations():
 async def seed_roles_and_users(organizations, permissions):
     """Create roles and users."""
     async with AsyncSessionLocal() as db:
-        org1, org2 = organizations
+        org1 = organizations[0] # Acme
 
-        # Create roles for org1
-        admin_role = Role(
-            organization_id=org1.id,
-            name="org_admin",
-            description="Organization administrator",
-            is_system_role=True,
-        )
-        db.add(admin_role)
+        # Use RoleService to create system roles with proper permissions
+        role_service = RoleService(db)
+        system_roles = await role_service.create_system_roles(org1.id)
 
-        pm_role = Role(
-            organization_id=org1.id,
-            name="project_manager",
-            description="Project manager",
-            is_system_role=True,
-        )
-        db.add(pm_role)
+        admin_role = system_roles.get("org_admin")
+        pm_role = system_roles.get("project_manager")
+        dev_role = system_roles.get("developer")
 
-        dev_role = Role(
-            organization_id=org1.id,
-            name="developer",
-            description="Developer",
-            is_system_role=True,
-        )
-        db.add(dev_role)
+        # Check Users
+        stmt_u = select(User).where(User.email == "admin@acme.com")
+        admin_user = (await db.execute(stmt_u)).scalars().first()
+        
+        stmt_pm_u = select(User).where(User.email == "pm@acme.com")
+        pm_user = (await db.execute(stmt_pm_u)).scalars().first()
 
-        await db.commit()
-        await db.refresh(admin_role)
-        await db.refresh(pm_role)
-        await db.refresh(dev_role)
+        stmt_dev_u = select(User).where(User.email == "dev@acme.com")
+        dev_user = (await db.execute(stmt_dev_u)).scalars().first()
 
-        # Assign all permissions to admin role
-        for permission in permissions:
-            admin_role.permissions.append(permission)
+        if not admin_user:
+            admin_user = User(
+                organization_id=org1.id,
+                email="admin@acme.com",
+                password_hash=get_password_hash("admin123"),
+                full_name="Admin User",
+            )
+            admin_user.roles.append(admin_role)
+            db.add(admin_user)
+        
+        if not pm_user:
+            pm_user = User(
+                organization_id=org1.id,
+                email="pm@acme.com",
+                password_hash=get_password_hash("pm123"),
+                full_name="Project Manager",
+            )
+            pm_user.roles.append(pm_role)
+            db.add(pm_user)
 
-        # Assign limited permissions to PM and Dev roles
-        for permission in permissions:
-            if permission.resource in ["issue", "feature", "project"]:
-                pm_role.permissions.append(permission)
-                if permission.action != "delete":
-                    dev_role.permissions.append(permission)
-
-        await db.commit()
-
-        # Create users
-        admin_user = User(
-            organization_id=org1.id,
-            email="admin@acme.com",
-            password_hash=get_password_hash("admin123"),
-            full_name="Admin User",
-        )
-        admin_user.roles.append(admin_role)
-        db.add(admin_user)
-
-        pm_user = User(
-            organization_id=org1.id,
-            email="pm@acme.com",
-            password_hash=get_password_hash("pm123"),
-            full_name="Project Manager",
-        )
-        pm_user.roles.append(pm_role)
-        db.add(pm_user)
-
-        dev_user = User(
-            organization_id=org1.id,
-            email="dev@acme.com",
-            password_hash=get_password_hash("dev123"),
-            full_name="Developer User",
-        )
-        dev_user.roles.append(dev_role)
-        db.add(dev_user)
+        if not dev_user:
+            dev_user = User(
+                organization_id=org1.id,
+                email="dev@acme.com",
+                password_hash=get_password_hash("dev123"),
+                full_name="Developer User",
+            )
+            dev_user.roles.append(dev_role)
+            db.add(dev_user)
 
         await db.commit()
-        await db.refresh(admin_user)
-        await db.refresh(pm_user)
-        await db.refresh(dev_user)
+        if admin_user: await db.refresh(admin_user)
+        if pm_user: await db.refresh(pm_user)
+        if dev_user: await db.refresh(dev_user)
 
-        logger.info(f"Created users: {admin_user.email}, {pm_user.email}, {dev_user.email}")
+        logger.info(f"Users ensured: {admin_user.email}, {pm_user.email}, {dev_user.email}")
         return admin_user, pm_user, dev_user
 
 
@@ -165,61 +164,67 @@ async def seed_projects_and_teams(organizations, users):
         admin_user, pm_user, dev_user = users
 
         # Create team
-        team = Team(
-            organization_id=org1.id,
-            name="Engineering Team",
-            description="Core engineering team",
-            team_type="engineering",
-        )
-        db.add(team)
-        await db.commit()
-        await db.refresh(team)
+        stmt = select(Team).where(Team.name == "Engineering Team", Team.organization_id == org1.id)
+        team = (await db.execute(stmt)).scalars().first()
+        if not team:
+            team = Team(
+                organization_id=org1.id,
+                name="Engineering Team",
+                description="Core engineering team",
+                team_type="engineering",
+            )
+            db.add(team)
+            await db.commit()
+            await db.refresh(team)
 
         # Create projects
-        project1 = Project(
-            organization_id=org1.id,
-            name="Trakly Platform",
-            slug="trakly-platform",
-            key="TRAK",
-            description="Main Trakly bug tracking platform",
-            lead_user_id=pm_user.id,
-        )
-        db.add(project1)
+        stmt_p1 = select(Project).where(Project.slug == "trakly-platform")
+        project1 = (await db.execute(stmt_p1)).scalars().first()
+        
+        stmt_p2 = select(Project).where(Project.slug == "mobile-app")
+        project2 = (await db.execute(stmt_p2)).scalars().first()
 
-        project2 = Project(
-            organization_id=org1.id,
-            name="Mobile App",
-            slug="mobile-app",
-            key="MOBILE",
-            description="Trakly mobile application",
-            lead_user_id=pm_user.id,
-        )
-        db.add(project2)
-
-        await db.commit()
-        await db.refresh(project1)
-        await db.refresh(project2)
-
-        # Create components
-        comp1 = Component(
-            project_id=project1.id,
-            name="Authentication",
-            description="User authentication and authorization",
-            lead_user_id=dev_user.id,
-        )
-        comp2 = Component(
-            project_id=project1.id,
-            name="Issue Tracking",
-            description="Core issue tracking functionality",
-            lead_user_id=dev_user.id,
-        )
-        db.add(comp1)
-        db.add(comp2)
+        if not project1:
+            project1 = Project(
+                organization_id=org1.id,
+                name="Trakly Platform",
+                slug="trakly-platform",
+                key="TRAK",
+                description="Main Trakly bug tracking platform",
+                lead_user_id=pm_user.id,
+            )
+            db.add(project1)
+        
+        if not project2:
+            project2 = Project(
+                organization_id=org1.id,
+                name="Mobile App",
+                slug="mobile-app",
+                key="MOBILE",
+                description="Trakly mobile application",
+                lead_user_id=pm_user.id,
+            )
+            db.add(project2)
 
         await db.commit()
+        if project1: await db.refresh(project1)
+        if project2: await db.refresh(project2)
 
-        logger.info(f"Created projects: {project1.name}, {project2.name}")
-        logger.info(f"Created team: {team.name}")
+        # Create memberships if they don't exist
+        for u in users:
+            stmt_m = select(ProjectMember).where(ProjectMember.project_id == project1.id, ProjectMember.user_id == u.id)
+            existing_m = (await db.execute(stmt_m)).scalars().first()
+            if not existing_m:
+                m = ProjectMember(
+                    project_id=project1.id,
+                    user_id=u.id,
+                    role="admin" if u == admin_user else "member"
+                )
+                db.add(m)
+        
+        await db.commit()
+        logger.info(f"Projects and memberships ensured for: {project1.name}")
+
 
 
 async def main():
@@ -233,7 +238,7 @@ async def main():
         users = await seed_roles_and_users(organizations, permissions)
         await seed_projects_and_teams(organizations, users)
 
-        logger.info("✅ Seed data created successfully!")
+        logger.info("✅ Seed data ensured successfully!")
         logger.info("\n" + "="*50)
         logger.info("Sample Login Credentials:")
         logger.info("="*50)

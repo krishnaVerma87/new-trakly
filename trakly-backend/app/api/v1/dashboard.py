@@ -8,7 +8,7 @@ from sqlalchemy import select, func
 from app.db.session import get_db
 from app.api.dependencies import get_current_user
 from app.models.user import User
-from app.models.issue import Issue, IssueStatus, IssueType
+from app.models.issue import Issue, IssueStatus, IssueType, Priority
 from app.models.feature import Feature
 from app.models.project import Project
 
@@ -179,3 +179,286 @@ async def get_recent_issues(
         }
         for issue in issues
     ]
+
+
+@router.get("/developer")
+async def get_developer_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get dashboard data for developers - focuses on their assigned tasks.
+    """
+    from sqlalchemy.orm import selectinload
+
+    user_id = current_user.id
+
+    # Get my assigned issues
+    my_issues_result = await db.execute(
+        select(Issue)
+        .where(Issue.assignee_id == user_id)
+        .where(Issue.status.not_in([IssueStatus.DONE, IssueStatus.CLOSED, IssueStatus.WONT_FIX]))
+        .options(selectinload(Issue.project))
+        .order_by(Issue.priority.desc(), Issue.created_at.desc())
+    )
+    my_issues = my_issues_result.scalars().all()
+
+    # Count by priority
+    priority_counts = {}
+    for issue in my_issues:
+        priority = issue.priority.value
+        priority_counts[priority] = priority_counts.get(priority, 0) + 1
+
+    # Count by status
+    status_counts = {}
+    for issue in my_issues:
+        status = issue.status.value
+        status_counts[status] = status_counts.get(status, 0) + 1
+
+    # Get recent issues assigned to me
+    recent_assigned = [
+        {
+            "id": issue.id,
+            "issue_key": issue.issue_key,
+            "title": issue.title,
+            "issue_type": issue.issue_type.value,
+            "status": issue.status.value,
+            "priority": issue.priority.value,
+            "project_name": issue.project.name if issue.project else None,
+            "created_at": issue.created_at.isoformat(),
+        }
+        for issue in my_issues[:10]
+    ]
+
+    # Time tracking stats
+    total_time_spent = sum(issue.time_spent_minutes for issue in my_issues)
+    total_time_estimated = sum(issue.time_estimate_minutes or 0 for issue in my_issues)
+
+    return {
+        "my_issues": {
+            "total": len(my_issues),
+            "by_priority": priority_counts,
+            "by_status": status_counts,
+            "critical_count": priority_counts.get("critical", 0),
+            "high_count": priority_counts.get("high", 0),
+        },
+        "recent_assigned": recent_assigned,
+        "time_tracking": {
+            "total_spent_minutes": total_time_spent,
+            "total_estimated_minutes": total_time_estimated,
+            "total_spent_hours": round(total_time_spent / 60, 1),
+            "total_estimated_hours": round(total_time_estimated / 60, 1),
+        },
+    }
+
+
+@router.get("/project-manager")
+async def get_project_manager_dashboard(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get dashboard data for project managers/scrum masters - focuses on team and sprint metrics.
+    """
+    from sqlalchemy.orm import selectinload
+    from app.models.sprint import Sprint
+
+    org_id = current_user.organization_id
+
+    # Get active sprints
+    active_sprints_result = await db.execute(
+        select(Sprint)
+        .where(Sprint.is_active == True)
+        .join(Project, Sprint.project_id == Project.id)
+        .where(Project.organization_id == org_id)
+        .options(selectinload(Sprint.issues))
+    )
+    active_sprints = active_sprints_result.scalars().all()
+
+    sprint_stats = []
+    for sprint in active_sprints:
+        total_issues = len(sprint.issues)
+        completed_issues = sum(
+            1 for issue in sprint.issues
+            if issue.status in [IssueStatus.DONE, IssueStatus.CLOSED, IssueStatus.WONT_FIX]
+        )
+        sprint_stats.append({
+            "id": sprint.id,
+            "name": sprint.name,
+            "goal": sprint.goal,
+            "start_date": sprint.start_date.isoformat(),
+            "end_date": sprint.end_date.isoformat(),
+            "total_issues": total_issues,
+            "completed_issues": completed_issues,
+            "progress_percentage": round((completed_issues / total_issues * 100) if total_issues > 0 else 0, 1),
+        })
+
+    # Get team workload - issues by assignee
+    team_workload_result = await db.execute(
+        select(
+            User.id,
+            User.full_name,
+            func.count(Issue.id).label("issue_count"),
+        )
+        .join(Issue, User.id == Issue.assignee_id)
+        .where(User.organization_id == org_id)
+        .where(Issue.status.not_in([IssueStatus.DONE, IssueStatus.CLOSED, IssueStatus.WONT_FIX]))
+        .group_by(User.id, User.full_name)
+        .order_by(func.count(Issue.id).desc())
+    )
+    team_workload = [
+        {
+            "user_id": row.id,
+            "user_name": row.full_name,
+            "active_issues": row.issue_count,
+        }
+        for row in team_workload_result.fetchall()
+    ]
+
+    # Get pending issues (unassigned)
+    pending_issues_result = await db.execute(
+        select(func.count(Issue.id))
+        .where(Issue.organization_id == org_id)
+        .where(Issue.assignee_id == None)
+        .where(Issue.status.not_in([IssueStatus.DONE, IssueStatus.CLOSED, IssueStatus.WONT_FIX]))
+    )
+    pending_issues_count = pending_issues_result.scalar_one()
+
+    # Get blocked issues (you can add a 'blocked' field to issues if needed)
+    # For now, we'll use issues in review status as proxy
+    blocked_issues_result = await db.execute(
+        select(func.count(Issue.id))
+        .where(Issue.organization_id == org_id)
+        .where(Issue.status == IssueStatus.REVIEW)
+    )
+    blocked_issues_count = blocked_issues_result.scalar_one()
+
+    return {
+        "active_sprints": sprint_stats,
+        "team_workload": team_workload,
+        "pending_issues": pending_issues_count,
+        "blocked_issues": blocked_issues_count,
+        "summary": {
+            "active_sprint_count": len(active_sprints),
+            "team_members": len(team_workload),
+        },
+    }
+
+
+@router.get("/bug-trends")
+async def get_bug_trends(
+    project_id: str = None,
+    days: int = 30,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """
+    Get bug trend analysis over time.
+    Shows creation and resolution trends grouped by day.
+    """
+    from datetime import datetime, timedelta
+    from sqlalchemy import and_, cast, Date
+
+    org_id = current_user.organization_id
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=days)
+
+    # Build base query
+    base_query = (
+        select(
+            cast(Issue.created_at, Date).label("date"),
+            func.count(Issue.id).label("count"),
+        )
+        .where(Issue.organization_id == org_id)
+        .where(Issue.issue_type == IssueType.BUG)
+    )
+
+    if project_id:
+        base_query = base_query.where(Issue.project_id == project_id)
+
+    # Get bugs created per day
+    created_query = (
+        base_query
+        .where(Issue.created_at >= start_date)
+        .group_by(cast(Issue.created_at, Date))
+        .order_by(cast(Issue.created_at, Date))
+    )
+    created_result = await db.execute(created_query)
+    created_data = {str(row.date): row.count for row in created_result.fetchall()}
+
+    # Get bugs resolved per day
+    resolved_query = (
+        select(
+            cast(Issue.resolved_at, Date).label("date"),
+            func.count(Issue.id).label("count"),
+        )
+        .where(Issue.organization_id == org_id)
+        .where(Issue.issue_type == IssueType.BUG)
+        .where(Issue.resolved_at.isnot(None))
+        .where(Issue.resolved_at >= start_date)
+    )
+
+    if project_id:
+        resolved_query = resolved_query.where(Issue.project_id == project_id)
+
+    resolved_query = (
+        resolved_query
+        .group_by(cast(Issue.resolved_at, Date))
+        .order_by(cast(Issue.resolved_at, Date))
+    )
+    resolved_result = await db.execute(resolved_query)
+    resolved_data = {str(row.date): row.count for row in resolved_result.fetchall()}
+
+    # Get current bug counts by severity
+    severity_query = (
+        select(Issue.severity, func.count(Issue.id))
+        .where(Issue.organization_id == org_id)
+        .where(Issue.issue_type == IssueType.BUG)
+        .where(Issue.status.not_in([IssueStatus.CLOSED, IssueStatus.DONE, IssueStatus.WONT_FIX]))
+    )
+
+    if project_id:
+        severity_query = severity_query.where(Issue.project_id == project_id)
+
+    severity_query = severity_query.group_by(Issue.severity)
+    severity_result = await db.execute(severity_query)
+    by_severity = {
+        (row[0].value if row[0] else "unset"): row[1]
+        for row in severity_result.fetchall()
+    }
+
+    # Get current bug counts by priority
+    priority_query = (
+        select(Issue.priority, func.count(Issue.id))
+        .where(Issue.organization_id == org_id)
+        .where(Issue.issue_type == IssueType.BUG)
+        .where(Issue.status.not_in([IssueStatus.CLOSED, IssueStatus.DONE, IssueStatus.WONT_FIX]))
+    )
+
+    if project_id:
+        priority_query = priority_query.where(Issue.project_id == project_id)
+
+    priority_query = priority_query.group_by(Issue.priority)
+    priority_result = await db.execute(priority_query)
+    by_priority = {row[0].value: row[1] for row in priority_result.fetchall()}
+
+    # Build timeline with all dates in range
+    timeline = []
+    current_date = start_date.date()
+    while current_date <= end_date.date():
+        date_str = str(current_date)
+        timeline.append({
+            "date": date_str,
+            "created": created_data.get(date_str, 0),
+            "resolved": resolved_data.get(date_str, 0),
+        })
+        current_date += timedelta(days=1)
+
+    return {
+        "timeline": timeline,
+        "by_severity": by_severity,
+        "by_priority": by_priority,
+        "total_open": sum(by_severity.values()),
+        "start_date": start_date.date().isoformat(),
+        "end_date": end_date.date().isoformat(),
+    }

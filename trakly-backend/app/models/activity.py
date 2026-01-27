@@ -12,6 +12,8 @@ class EntityType(str, enum.Enum):
     FEATURE = "feature"
     PROJECT = "project"
     COMMENT = "comment"
+    SPRINT = "sprint"
+    NOTIFICATION = "notification"
 
 
 class Activity(BaseModel):
@@ -42,7 +44,7 @@ class Activity(BaseModel):
     )
     old_value = Column(Text, nullable=True)  # JSON string
     new_value = Column(Text, nullable=True)  # JSON string
-    metadata = Column(Text, nullable=True)  # Additional context as JSON
+    additional_data = Column(Text, nullable=True)  # Additional context as JSON
 
     # Relationships
     organization = relationship("Organization")
