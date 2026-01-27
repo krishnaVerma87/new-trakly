@@ -164,6 +164,7 @@ export interface IssueUpdate {
   assignee_id?: string | null;
   component_id?: string | null;
   sprint_id?: string | null;
+  workflow_column_id?: string | null;
   label_ids?: string[];
   repro_steps?: string;
   environment?: string;
@@ -199,8 +200,10 @@ export interface IssueResponse {
   severity?: Severity;
   reporter_id: string;
   assignee_id?: string;
+  assignee?: UserResponse; // Full assignee user object
   component_id?: string;
   parent_issue_id?: string;
+  feature_id?: string; // Optional link to parent feature
   sprint_id?: string;
   workflow_column_id?: string;
   repro_steps?: string;

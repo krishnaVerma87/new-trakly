@@ -27,6 +27,8 @@ export const IssueActivity: React.FC<IssueActivityProps> = ({ issueId }) => {
             const mockActivities: ActivityItem[] = [
                 {
                     id: '1',
+                    entity_type: 'issue',
+                    entity_id: issueId,
                     issue_id: issueId,
                     user_id: 'user-1',
                     user: {
@@ -45,6 +47,8 @@ export const IssueActivity: React.FC<IssueActivityProps> = ({ issueId }) => {
                 },
                 {
                     id: '2',
+                    entity_type: 'issue',
+                    entity_id: issueId,
                     issue_id: issueId,
                     user_id: 'user-2',
                     user: {
@@ -65,6 +69,8 @@ export const IssueActivity: React.FC<IssueActivityProps> = ({ issueId }) => {
                 },
                 {
                     id: '3',
+                    entity_type: 'issue',
+                    entity_id: issueId,
                     issue_id: issueId,
                     user_id: 'system',
                     user: {
@@ -113,21 +119,21 @@ export const IssueActivity: React.FC<IssueActivityProps> = ({ issueId }) => {
 
                                     <div className="relative flex space-x-3">
                                         <div>
-                                            {activity.user.full_name === 'System' ? (
+                                            {activity.user?.full_name === 'System' ? (
                                                 <span className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center ring-8 ring-white">
                                                     <svg className="h-4 w-4 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                                                     </svg>
                                                 </span>
-                                            ) : (
+                                            ) : activity.user ? (
                                                 <UserAvatar user={activity.user} className="h-8 w-8 ring-8 ring-white" />
-                                            )}
+                                            ) : null}
                                         </div>
 
                                         <div className="min-w-0 flex-1 pt-1.5">
                                             <div className="flex justify-between items-center mb-1">
                                                 <p className="text-sm font-medium text-gray-900">
-                                                    {activity.user.full_name}
+                                                    {activity.user?.full_name || 'Unknown User'}
                                                 </p>
                                                 <span className="text-xs text-gray-500 whitespace-nowrap">
                                                     {formatDistanceToNow(new Date(activity.created_at), { addSuffix: true })}

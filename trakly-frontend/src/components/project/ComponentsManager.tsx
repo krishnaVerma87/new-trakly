@@ -191,15 +191,16 @@ export const ComponentsManager: React.FC<ComponentsManagerProps> = ({ projectId 
                                 </div>
                             </div>
 
-                            {component.lead && (
+                            {/* Lead user display - uncomment when backend provides lead user data
+                            {component.lead_user_id && (
                                 <div className="flex items-center gap-2 text-sm text-gray-600 mt-3 pt-3 border-t border-gray-100">
                                     <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                                     </svg>
                                     <span className="font-medium">Lead:</span>
-                                    <span>{component.lead.full_name}</span>
+                                    <span>{component.lead_user_id}</span>
                                 </div>
-                            )}
+                            )} */}
                         </div>
                     ))}
                 </div>

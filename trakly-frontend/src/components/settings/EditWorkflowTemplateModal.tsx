@@ -123,7 +123,7 @@ export const EditWorkflowTemplateModal: React.FC<EditWorkflowTemplateModalProps>
       if (response.data.safe_to_apply) {
         toast.success('Changes can be applied safely');
       } else {
-        toast.warning(`${response.data.warnings.length} migration(s) required`);
+        toast(`${response.data.warnings.length} migration(s) required`, { icon: '⚠️' });
       }
     } catch (error: any) {
       toast.error(error.response?.data?.detail || 'Failed to preview changes');

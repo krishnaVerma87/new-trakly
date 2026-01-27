@@ -214,21 +214,21 @@ export const EditIssueDrawer: React.FC<EditIssueDrawerProps> = ({
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                             <UserPicker
                                 projectId={issue.project_id}
-                                value={formData.assignee_id}
+                                value={formData.assignee_id ?? undefined}
                                 onChange={(userId) => setFormData(prev => ({ ...prev, assignee_id: userId }))}
                                 label="Assignee"
                             />
 
                             <ComponentPicker
                                 projectId={issue.project_id}
-                                value={formData.component_id}
+                                value={formData.component_id ?? undefined}
                                 onChange={(id) => setFormData(prev => ({ ...prev, component_id: id }))}
                                 label="Component"
                             />
 
                             <SprintPicker
                                 projectId={issue.project_id}
-                                value={formData.sprint_id}
+                                value={formData.sprint_id ?? undefined}
                                 onChange={(id) => setFormData(prev => ({ ...prev, sprint_id: id }))}
                                 label="Sprint"
                             />

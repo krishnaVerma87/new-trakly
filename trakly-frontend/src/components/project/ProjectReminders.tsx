@@ -16,7 +16,7 @@ export const ProjectReminders: React.FC<ProjectRemindersProps> = ({ projectId })
     // Form state
     const [name, setName] = useState('');
     const [days, setDays] = useState(3);
-    const [selectedSprint, setSelectedSprint] = useState<string>('current');
+    const [selectedSprint, setSelectedSprint] = useState<'current' | 'next' | 'any'>('current');
     const [selectedPriorities, setSelectedPriorities] = useState<string[]>(['high', 'critical']);
     const [selectedStatuses, setSelectedStatuses] = useState<string[]>(['new', 'in_progress']);
 
@@ -131,7 +131,7 @@ export const ProjectReminders: React.FC<ProjectRemindersProps> = ({ projectId })
                             <label className="block text-sm font-medium text-gray-700 mb-1">Sprint Filter</label>
                             <select
                                 value={selectedSprint}
-                                onChange={(e) => setSelectedSprint(e.target.value)}
+                                onChange={(e) => setSelectedSprint(e.target.value as 'current' | 'next' | 'any')}
                                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
                             >
                                 <option value="current">Current Sprint</option>

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { wikiService } from '@/lib/services/wiki.service';
 import type { WikiPageResponse } from '@/types';
 import toast from 'react-hot-toast';

@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { sprintsService } from '@/lib/services/sprints.service';
 import { issuesService } from '@/lib/services/issues.service';
 import { projectsService } from '@/lib/services/projects.service';
-import { SprintResponse, IssueResponse, ProjectResponse, WorkflowColumnResponse } from '@/types';
+import { SprintResponse, IssueResponse, WorkflowColumnResponse } from '@/types';
 import { SprintStatusBadge } from '@/components/sprint/SprintStatusBadge';
 import { KanbanBoard } from '@/components/issue/KanbanBoard';
 import { CreateIssueDrawer } from '@/components/issue/CreateIssueDrawer';
@@ -15,7 +15,6 @@ export const SprintBoardPage: React.FC = () => {
 
   const [sprint, setSprint] = useState<SprintResponse | null>(null);
   const [issues, setIssues] = useState<IssueResponse[]>([]);
-  const [project, setProject] = useState<ProjectResponse | null>(null);
   const [workflowColumns, setWorkflowColumns] = useState<WorkflowColumnResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
@@ -32,7 +31,6 @@ export const SprintBoardPage: React.FC = () => {
 
       // Fetch project with workflow template
       const projectResponse = await projectsService.getProject(projectId);
-      setProject(projectResponse.data);
 
       // Extract workflow columns
       if (projectResponse.data.workflow_template?.columns) {

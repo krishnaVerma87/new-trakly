@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { dashboardService } from '@/lib/services/dashboard.service';
-import { DeveloperDashboardData } from '@/types';
+import { DeveloperDashboardData, Priority, IssueStatus, IssueType } from '@/types';
 import { IssueTypeIcon } from '@/components/issue/IssueTypeIcon';
 import { IssuePriorityBadge } from '@/components/issue/IssuePriorityBadge';
 import { IssueStatusBadge } from '@/components/issue/IssueStatusBadge';
@@ -99,7 +99,7 @@ export const DeveloperDashboard = () => {
               {Object.entries(data.my_issues.by_priority).map(([priority, count]) => (
                 <div key={priority} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <IssuePriorityBadge priority={priority} />
+                    <IssuePriorityBadge priority={priority as Priority} />
                   </div>
                   <span className="text-2xl font-bold text-gray-900">{count}</span>
                 </div>
@@ -120,7 +120,7 @@ export const DeveloperDashboard = () => {
             <div className="space-y-3">
               {Object.entries(data.my_issues.by_status).map(([status, count]) => (
                 <div key={status} className="flex items-center justify-between">
-                  <IssueStatusBadge status={status} />
+                  <IssueStatusBadge status={status as IssueStatus} />
                   <span className="text-2xl font-bold text-gray-900">{count}</span>
                 </div>
               ))}
@@ -185,17 +185,17 @@ export const DeveloperDashboard = () => {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center gap-2">
-                      <IssueTypeIcon type={issue.issue_type} className="w-4 h-4" />
+                      <IssueTypeIcon type={issue.issue_type as IssueType} className="w-4 h-4" />
                       <span className="text-sm text-gray-500 capitalize">
                         {issue.issue_type.replace('_', ' ')}
                       </span>
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <IssuePriorityBadge priority={issue.priority} />
+                    <IssuePriorityBadge priority={issue.priority as Priority} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <IssueStatusBadge status={issue.status} />
+                    <IssueStatusBadge status={issue.status as IssueStatus} />
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                     {issue.project_name || 'N/A'}

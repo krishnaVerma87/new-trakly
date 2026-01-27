@@ -1,11 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { dashboardService } from '@/lib/services/dashboard.service';
 import { ProjectManagerDashboardData } from '@/types';
 import toast from 'react-hot-toast';
 
 export const ProjectManagerDashboard = () => {
-  const navigate = useNavigate();
   const [data, setData] = useState<ProjectManagerDashboardData | null>(null);
   const [loading, setLoading] = useState(true);
 

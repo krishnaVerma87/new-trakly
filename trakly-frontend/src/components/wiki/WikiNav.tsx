@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import { wikiService } from '@/lib/services/wiki.service';
 import type { WikiPageTreeNode } from '@/types';
 import toast from 'react-hot-toast';

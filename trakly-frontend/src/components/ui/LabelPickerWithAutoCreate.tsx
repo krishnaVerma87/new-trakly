@@ -10,16 +10,17 @@ interface LabelPickerWithAutoCreateProps {
   label?: string;
 }
 
-const PRESET_COLORS = [
-  '#3B82F6', // blue
-  '#10B981', // green
-  '#F59E0B', // amber
-  '#EF4444', // red
-  '#8B5CF6', // purple
-  '#EC4899', // pink
-  '#14B8A6', // teal
-  '#6366F1', // indigo
-];
+// Preset colors for label creation (currently unused, reserved for future use)
+// const PRESET_COLORS = [
+//   '#3B82F6', // blue
+//   '#10B981', // green
+//   '#F59E0B', // amber
+//   '#EF4444', // red
+//   '#8B5CF6', // purple
+//   '#EC4899', // pink
+//   '#14B8A6', // teal
+//   '#6366F1', // indigo
+// ];
 
 export const LabelPickerWithAutoCreate: React.FC<LabelPickerWithAutoCreateProps> = ({
   projectId,
@@ -29,7 +30,6 @@ export const LabelPickerWithAutoCreate: React.FC<LabelPickerWithAutoCreateProps>
   label = 'Labels',
 }) => {
   const [labels, setLabels] = useState<LabelResponse[]>([]);
-  const [loading, setLoading] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [pendingLabels, setPendingLabels] = useState<string[]>([]);
@@ -38,15 +38,12 @@ export const LabelPickerWithAutoCreate: React.FC<LabelPickerWithAutoCreateProps>
   useEffect(() => {
     const fetchLabels = async () => {
       try {
-        setLoading(true);
         const response = await apiClient.get<LabelResponse[]>(
           `/projects/${projectId}/labels`
         );
         setLabels(response.data);
       } catch (error) {
         console.error('Failed to fetch labels:', error);
-      } finally {
-        setLoading(false);
       }
     };
 
